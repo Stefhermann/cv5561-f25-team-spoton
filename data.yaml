@@ -1,0 +1,27 @@
+train: data/train/images
+val: data/valid/images
+test: data/test/images
+
+names: 
+  0: ace
+  1: blue_1
+  2: blue_2
+  3: blue_3
+  4: blue_4
+  5: blue_5
+  6: blue_6
+  7: four
+  8: red_1
+  9: red_2
+  10: red_3
+  11: red_4
+  12: red_5
+  13: red_6
+  14: three
+  15: two
+  16: yellow_1
+  17: yellow_2
+  18: yellow_3
+  19: yellow_4
+  20: yellow_5
+  21: yellow_6
