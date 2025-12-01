@@ -4,5 +4,8 @@
 data/frames/
 video_data/
 runs/
+test_data/
+__pycache__/
+backups/
 
 .venv
