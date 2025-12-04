@@ -3,7 +3,7 @@ import pathlib
 # should be run from repo root
 
 data_path = pathlib.Path("data/")
-subdirs = ['train', 'valid', 'test']
+subdirs = ['obb-train', 'obb-valid', 'obb-test']
 
 old_schema = {
     0: 'ace',
