@@ -12,7 +12,7 @@ def main():
         imgsz=512,
         batch=16,
         project="model",
-        name="rdg_oob",
+        name="rdg_obb",
     )
 
 

@@ -10,10 +10,10 @@ imgsz: 512
 save: true
 save_period: -1
 cache: false
-device: cpu
+device: null
 workers: 8
 project: model
-name: rdg_oob
+name: rdg_obb
 exist_ok: false
 pretrained: true
 optimizer: auto
@@ -103,4 +103,4 @@ auto_augment: randaugment
 erasing: 0.4
 cfg: null
 tracker: botsort.yaml
-save_dir: /Users/stefan/School/5561/FinalProject/SpotOn/model/rdg_oob
+save_dir: /users/5/walk0950/cv5561-f25-team-spoton/model/rdg_obb
