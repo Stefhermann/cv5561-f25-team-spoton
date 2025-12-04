@@ -78,3 +78,9 @@ ultralytics==8.3.228
 ultralytics-thop==2.0.18
 urllib3==2.5.0
 uvicorn==0.38.0
+
+# ---
+scikit-learn
+ipykernel
+pip
+einops
