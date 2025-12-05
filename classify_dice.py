@@ -33,6 +33,18 @@ DIE = 0
 
 example_frame = "data/frames/frame_0214.jpg"
 
+def show_imgs_grid(imgs, width=10):
+    imgs = imgs.copy()
+    N,H,W,C = imgs.shape
+    slots_missing = (-N) % width
+    imgs = np.pad(imgs, ((0,slots_missing), (0,0), (0,0), (0,0)))
+    NN = N + slots_missing
+    assert imgs.shape == (NN,H,W,C)
+    grid = einops.rearrange(imgs, "(nh nw) H W C -> (nh H) (nw W) C", nw=width)
+    plt.figure()
+    imshow(grid)
+
+
 def generate_dice_dataset(obb_model):
     frames_path = pathlib.Path("data/frames")
     dice_path = pathlib.Path("data/dice")
@@ -140,7 +152,6 @@ def posterize(imgs, k_means, palette):
 def load_labeled_dice():
     labeled_dice_path = pathlib.Path("data/dice/labeled")
     labels_path = labeled_dice_path/"labels.txt"
-    labels = dict()
     legal_player_labels = {
         'R': 0,
         'Y': 1,
@@ -173,14 +184,23 @@ def load_labeled_dice():
             if id not in img_dict or player_label not in legal_player_labels or value_label not in legal_value_labels:
                 spoiled_indices.add(idx)
                 continue
+
             ids.append(id)
             players.append(legal_player_labels[player_label])
             values.append(legal_value_labels[value_label])
+            imgs.append(img_dict[id])
+            
 
     ids = np.array(ids)
     players = np.array(players)
     values = np.array(values)
     imgs = np.stack(imgs, axis=0)
+
+    N,H,W,C = imgs.shape
+    assert imgs.shape == (N,H,W,C)
+    assert ids.shape == (N,)
+    assert values.shape == (N,)
+    assert players.shape == (N,)
     
     return imgs,ids,players,values
 
