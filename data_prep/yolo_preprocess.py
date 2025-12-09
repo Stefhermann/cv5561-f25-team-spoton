@@ -1,4 +1,6 @@
 import pathlib
+import shutil
+import os
 # should be run from repo root
 
 def construct_mapping(old_schema, old_dice_labels, new_schema):
@@ -146,21 +148,31 @@ def preprocess_additional():
     # thus,
     label_mapping = construct_mapping(old_schema, old_dice_labels, new_schema)
 
-    # unify dice labels
+    # copy over labels
+    # (unifying dice labels as well)
     for sub in subdirs:
-        input_dir = src_path/sub/"labels_raw"
-        output_dir = output_path/sub/"labels"
+        input_label_dir = src_path/sub/"labels_raw"
+        output_label_dir = output_path/sub/"labels"
+        input_image_dir = src_path/sub/"images"
+        output_image_dir = output_path/sub/"images"
 
-        if not input_dir.exists():
-            print(f"Alert: {input_dir} does not exist. Continuing...")
+        if not input_label_dir.exists():
+            print(f"Alert: {input_label_dir} does not exist. Continuing...")
             continue
-        output_dir.mkdir(parents=True, exist_ok=True)
-        for input_path in input_dir.glob("*.txt"):
-            output_path = output_dir/input_path.name
+        output_label_dir.mkdir(parents=True, exist_ok=True)
+        for input_path in input_label_dir.glob("*.txt"):
+            output_path = output_label_dir/input_path.name
             with open(input_path, 'r', encoding='utf8') as input_labels, open(output_path, 'w+', encoding='utf8') as output_labels:
                 for line in input_labels:
                     label,rest = line.split(" ", maxsplit=1)
                     output_labels.write(f"{label_mapping[label]} {rest}")
+
+        # copy over images (symlinking seems nice to maintain single source of truth)
+        for input_path in input_image_dir.glob("*.jpg"):
+            output_path = output_image_dir/input_path.name
+            # os.symlink(input_path, output_path)
+            os.remove(output_path)
+            shutil.copy(input_path, output_path)
 
 if __name__ == '__main__':
     preprocess_frames()

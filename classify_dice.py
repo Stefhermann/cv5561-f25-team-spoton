@@ -65,16 +65,6 @@ def generate_dice_dataset(obb_model):
 def imshow(img):
     return plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 
-def infer(frame):
-    ...
-
-# def make_color_patch(color, h=32,w=32)
-
-
-
-def imshow(img):
-    return plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-
 def crop_bb(img, bb, res_shape=(128,128)):
     res_points = np.array([
         [0, 0],
@@ -204,6 +194,96 @@ def load_labeled_dice():
     
     return imgs,ids,players,values
 
+
+
+def kmeans_cluster_players(histograms, n_players):
+    """will hopefully provdie pretty good guesss of player assignments for each die"""
+    player_k_means = sklearn.cluster.KMeans(n_clusters=n_players, random_state=1337, n_init=10) # `n_init=10` might be overkill
+
+    player_k_means = player_k_means.fit(histograms)
+    # return player_k_means
+    # reminder for self: want to return cluster labels for each player
+    return player_k_means.fit_predict(histograms)
+
+# TODO: find out if svm actually needed/useful. perhaps just directly using kmeans will perform well enough. However, this svm also provides the ability/flexibility for us to correct kmeans-generated labels.
+def fit_player_svm(histograms, label_train, n_players):
+    svms = []
+    for cls in range(n_players):
+        in_class = np.where(label_train == cls, 1, -1)
+        svm = sklearn.svm.LinearSVC(
+            C=1.0,
+            max_iter=2000,
+            random_state=1337
+        )
+        svm.fit(histograms, in_class)
+        svms.append(svm)
+    return svms
+
+def infer_player_svm(histograms, svms):
+    n_samples = histograms.shape[0]
+    n_classes = len(svms)
+    scores = np.zeros((n_samples, n_classes))
+    for cls,svm in enumerate(svms):
+        scores[:,cls] = svm.decision_function(histograms)
+
+    pred = np.argmax(scores, axis=1) # (n_samples,)
+    return pred
+
+def fit_player_colors(obb_model, unlabeled_dice_pics, player_dice_pics):
+    """
+    inputs:
+    - 1 or more images of all dice on game table, unlabeled (used to learn color palette)
+    - 1 or more images of each player's die (used to specify which index to give to each color)
+
+    outputs:
+    """
+
+    n_players = len(player_dice_pics)
+
+    C = 3
+    N,H,W,_ = unlabeled_dice_pics.shape
+    assert unlabeled_dice_pics.shape == (N, H, W, C)
+    for player_idx,dice_pics in enumerate(player_dice_pics):
+        N,H,W,_ = dice_pics.shape
+        assert dice_pics.shape == (N, H, W, C)
+
+    print('adsf')
+    unlabeled_img = unlabeled_dice_pics[0,:,:,:]
+    res = obb_model(unlabeled_img)[0]
+    # res = res[0]
+    dice_cropped = batch_crop_dice(unlabeled_img, res)
+    color_k_means,palette = kmeans_color(dice_cropped, k=16)
+
+    # labeled_dice = []
+    classeses = []
+    posterizeds = []
+    histograms = []
+    class_labels = []
+    for p in range(n_players):
+        labeled_img = player_dice_pics[p][0,:,:,:]
+        print(p)
+        res = obb_model(unlabeled_img)[0]
+        labeled_dice_cropped = batch_crop_dice(labeled_img, res)
+        classes,posterized = posterize(labeled_dice_cropped, color_k_means, palette)
+        classeses.append(classes)
+        posterizeds.append(posterized)
+        
+        for die_idx in range(labeled_dice_cropped.shape[0]):
+            die_image = einops.rearrange(labeled_dice_cropped[die_idx,:,:,:], "H W C -> H W C")
+            histograms.append(labeled_dice_cropped)
+            class_labels.append(p)
+
+    histograms = np.stack(histograms, axis=0)    
+    class_labels = np.array(class_labels)
+
+    return show_imgs_grid(histograms)
+    
+
+    # print()
+
+
+
+
 if __name__ == '__main__':
     obb_model = YOLO("model/rdg_obb/weights/best.pt")
 
@@ -212,14 +292,15 @@ if __name__ == '__main__':
     # plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     imshow(img)
 
-    res = obb_model(img, task='obb')[0]
-    res
 
-    res.obb
+    # res = obb_model(img, task='obb')[0]
+    # res
 
-    dice_bbs = res.obb.xyxyxyxy[res.obb.cls == DIE, ...]
-    die_idx = 0
-    bb = dice_bbs[die_idx,...].cpu().numpy()
+    # res.obb
+
+    # dice_bbs = res.obb.xyxyxyxy[res.obb.cls == DIE, ...]
+    # die_idx = 0
+    # bb = dice_bbs[die_idx,...].cpu().numpy()
 
 
-    res_shape = (128,128)
+    # res_shape = (128,128)

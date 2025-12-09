@@ -1,6 +1,6 @@
-train: data/obb-train/images
-val: data/obb-valid/images
-test: data/obb-test/images
+train: data/obb_train/images
+val: data/obb_valid/images
+test: data/obb_test/images
 
 names:
   0: die

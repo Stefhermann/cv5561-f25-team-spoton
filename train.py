@@ -13,6 +13,12 @@ def main():
         batch=16,
         project="model",
         name="rdg_obb",
+        # augmentations (docs: https://docs.ultralytics.com/guides/yolo-data-augmentation/)
+        hsv_h=1.0,
+        hsv_v=0.2,
+        degrees=180,
+        scale=0.5,
+        shear=5.0,
     )
 
 
