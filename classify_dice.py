@@ -201,9 +201,10 @@ def kmeans_cluster_players(histograms, n_players):
     player_k_means = sklearn.cluster.KMeans(n_clusters=n_players, random_state=1337, n_init=10) # `n_init=10` might be overkill
 
     player_k_means = player_k_means.fit(histograms)
+    predictions = player_k_means.predict(histograms)
     # return player_k_means
     # reminder for self: want to return cluster labels for each player
-    return player_k_means.fit_predict(histograms)
+    return player_k_means,predictions
 
 # TODO: find out if svm actually needed/useful. perhaps just directly using kmeans will perform well enough. However, this svm also provides the ability/flexibility for us to correct kmeans-generated labels.
 def fit_player_svm(histograms, label_train, n_players):
@@ -229,7 +230,7 @@ def infer_player_svm(histograms, svms):
     pred = np.argmax(scores, axis=1) # (n_samples,)
     return pred
 
-def fit_player_colors(obb_model, unlabeled_dice_pics, player_dice_pics):
+def fit_player_colors(obb_model, unsupervised_dice_imgs, player_dice_imgs, palette_size=16):
     """
     inputs:
     - 1 or more images of all dice on game table, unlabeled (used to learn color palette)
@@ -238,46 +239,129 @@ def fit_player_colors(obb_model, unlabeled_dice_pics, player_dice_pics):
     outputs:
     """
 
-    n_players = len(player_dice_pics)
+    n_players = len(player_dice_imgs)
 
+    # (data shape assertions)
     C = 3
-    N,H,W,_ = unlabeled_dice_pics.shape
-    assert unlabeled_dice_pics.shape == (N, H, W, C)
-    for player_idx,dice_pics in enumerate(player_dice_pics):
-        N,H,W,_ = dice_pics.shape
-        assert dice_pics.shape == (N, H, W, C)
+    N_unsupervised,H,W,_ = unsupervised_dice_imgs.shape
+    assert unsupervised_dice_imgs.shape == (N_unsupervised, H, W, C)
+    N_labeled = [0]*n_players
+    for player_idx,dice_imgs in enumerate(player_dice_imgs):
+        N_labeled[player_idx],H,W,_ = dice_imgs.shape
+        assert dice_imgs.shape == (N_labeled[player_idx], H, W, C)
 
-    print('adsf')
-    unlabeled_img = unlabeled_dice_pics[0,:,:,:]
-    res = obb_model(unlabeled_img)[0]
-    # res = res[0]
-    dice_cropped = batch_crop_dice(unlabeled_img, res)
-    color_k_means,palette = kmeans_color(dice_cropped, k=16)
+    print('Learning color palette from unsupervised dice img(s)...')
+    dice_cropped = []
+    for img_idx in range(N_unsupervised):
+        unsupervised_img = unsupervised_dice_imgs[img_idx,:,:,:]
+        res = obb_model(unsupervised_img)[0]
+        # unsupervised_img = cv2.resize(unsupervised_img, (512,512))
+        # res = res[0]
+        # print(res)
+        curr_dice_cropped = batch_crop_dice(unsupervised_img, res) # (n_dice_in_img, H, W, C)
+        show_imgs_grid(curr_dice_cropped)
+        dice_cropped.append(curr_dice_cropped)
+    dice_cropped = np.concat(dice_cropped, axis=0) # (n_dice_unsupervised, H, W, C)
 
-    # labeled_dice = []
+    color_k_means,palette = kmeans_color(dice_cropped, k=palette_size)
+    
+    # debug: view palette
+    imshow(einops.rearrange(palette, "(h w) C -> h w C", w=8))
+    plt.title("Color palette")
+
+    print("Clustering to obtain player assignments...")
+    all_dice_cropped = []
     classeses = []
     posterizeds = []
     histograms = []
     class_labels = []
     for p in range(n_players):
-        labeled_img = player_dice_pics[p][0,:,:,:]
-        print(p)
-        res = obb_model(unlabeled_img)[0]
-        labeled_dice_cropped = batch_crop_dice(labeled_img, res)
-        classes,posterized = posterize(labeled_dice_cropped, color_k_means, palette)
-        classeses.append(classes)
-        posterizeds.append(posterized)
-        
-        for die_idx in range(labeled_dice_cropped.shape[0]):
-            die_image = einops.rearrange(labeled_dice_cropped[die_idx,:,:,:], "H W C -> H W C")
-            histograms.append(labeled_dice_cropped)
-            class_labels.append(p)
+        n_imgs,H,W,_ = player_dice_imgs[p].shape
+        assert player_dice_imgs[p].shape == (n_imgs, H, W, C)
 
-    histograms = np.stack(histograms, axis=0)    
-    class_labels = np.array(class_labels)
+        # # debug: view all images for this player
+        # print(p)
+        # plt.figure()
+        # show_imgs_grid(player_dice_imgs[p], width=1)
+        # plt.show()
 
-    return show_imgs_grid(histograms)
-    
+        for img_idx in range(n_imgs):
+            labeled_img = player_dice_imgs[p][img_idx,:,:,:]
+
+            res = obb_model(labeled_img)[0]
+            labeled_dice_cropped = batch_crop_dice(labeled_img, res)
+            n_dice,H,W,_ = labeled_dice_cropped.shape
+            assert labeled_dice_cropped.shape == (n_dice, H, W, C)
+            all_dice_cropped.append(labeled_dice_cropped)
+
+            # # debug: view dice in this image
+            # plt.figure()
+            # show_imgs_grid(labeled_dice_cropped)
+            # plt.show()
+
+            curr_classes,curr_posterized = posterize(labeled_dice_cropped, color_k_means, palette)
+            curr_classes_flattened = einops.rearrange(curr_classes, "N H W -> N (H W)")
+            
+            curr_class_labels = np.array([p] * n_dice)
+            curr_histograms = np.zeros((n_dice, palette_size))
+            for die_idx in range(n_dice): # TODO: vectorize?
+                print(f"{curr_classes_flattened.shape=}")
+                ligma = np.bincount(curr_classes_flattened[die_idx], minlength=palette_size)
+                print(f"{ligma.shape=}")
+                curr_histograms[die_idx,:] = ligma
+                curr_histograms[die_idx,:] /= curr_histograms[die_idx,:].sum()
+            histograms.append(curr_histograms)
+
+            # for die_idx in range(labeled_dice_cropped.shape[0]):
+            #     die_image = einops.rearrange(labeled_dice_cropped[die_idx,:,:,:], "H W C -> H W C")
+            #     histograms.append(die_image)
+            #     class_labels.append(p)
+
+            class_labels.append(curr_class_labels)
+            classeses.append(curr_classes)
+            posterizeds.append(curr_posterized)
+
+    all_dice_cropped = np.concat(all_dice_cropped, axis=0)
+    histograms = np.concat(histograms, axis=0)    
+    class_labels = np.concat(class_labels, axis=0)
+
+    print(f"{all_dice_cropped.shape=}")
+    plt.figure()
+    show_imgs_grid(all_dice_cropped)
+    plt.title("Dice found in `player_dice_imgs`")
+
+    player_k_means,cluster_assignments = kmeans_cluster_players(
+        histograms=histograms,
+        n_players=n_players+1 # add a pseudo-player to try to catch spurious dice detections, e.g. the emblems on cards
+    )
+
+    # debug: visualize
+    pca = sklearn.decomposition.PCA(n_components=2, whiten=True, random_state=1337)
+    hist_pca = pca.fit_transform(histograms)
+    plt.figure()
+    plt.scatter(hist_pca[:,0], hist_pca[:,1], c=class_labels)
+    plt.colorbar()
+    plt.title("Class assignments")
+    plt.figure()
+    plt.scatter(hist_pca[:,0], hist_pca[:,1], c=cluster_assignments)
+    plt.title("Cluster assignments")
+    plt.colorbar()
+
+    class_to_clusters = [set() for _ in range(n_players)]
+    for cluster_id in range(n_players+1):
+        is_member = (cluster_assignments==cluster_id)
+        plt.figure()
+        show_imgs_grid(all_dice_cropped[is_member,:,:,:])
+        print(class_labels[is_member])
+        classes_present = np.unique(class_labels[is_member])
+        print(classes_present)
+        if len(classes_present) == 1:
+            class_to_clusters[classes_present.item()].add(cluster_id)
+            plt.title(f"Cluster {cluster_id} members (homogeneous) -> Player {classes_present.item()}")
+        else: plt.title(f"Cluster {cluster_id} members (heterogeneous)")
+    print(f"{class_to_clusters=}")
+
+    return color_k_means,player_k_means,class_to_clusters
 
     # print()
 
