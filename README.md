@@ -12,3 +12,6 @@ uv pip install -r requirements.txt # TODO: simplify requirements.txt
 
 ### Training
 Download training videos from google drive, use `data_prep/video_data_rename.py` to clean up names
+
+### Tips for connecting camera
+Camdroid and OBS seem to work well
