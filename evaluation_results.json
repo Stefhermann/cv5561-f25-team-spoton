@@ -1,0 +1,53 @@
+{
+  "timestamp": "2025-12-09T09:03:08.319823",
+  "summary": {
+    "n_games": 8,
+    "exact_match_accuracy": 0.0,
+    "total_mae": 12.333333333333334,
+    "total_rmse": 12.767145334803704
+  },
+  "per_player": {
+    "blue": {
+      "accuracy": 0.0,
+      "mae": 16.0,
+      "rmse": 16.0
+    },
+    "red": {
+      "accuracy": 0.0,
+      "mae": 8.0,
+      "rmse": 8.0
+    },
+    "yellow": {
+      "accuracy": 0.0,
+      "mae": 13.0,
+      "rmse": 13.0
+    }
+  },
+  "game_results": [
+    {
+      "game": 1,
+      "actual": {
+        "blue": 12,
+        "red": 8,
+        "yellow": 15
+      },
+      "predicted": {
+        "blue": 28,
+        "red": 0,
+        "yellow": 28
+      },
+      "exact_match": false,
+      "errors": {
+        "blue": 16,
+        "red": -8,
+        "yellow": 13
+      }
+    }
+  ],
+  "within_tolerance": {
+    "0_points": 0,
+    "2_points": 0,
+    "5_points": 0,
+    "10_points": 0
+  }
+}
