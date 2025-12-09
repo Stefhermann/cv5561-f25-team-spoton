@@ -13,7 +13,7 @@ def construct_mapping(old_schema, old_dice_labels, new_schema):
 
 def preprocess_frames():
     data_path = pathlib.Path("data/")
-    subdirs = ['obb-train', 'obb-valid', 'obb-test']
+    subdirs = ['obb_train', 'obb_valid', 'obb_test']
 
     old_schema = {
         0: 'ace',
@@ -93,7 +93,7 @@ def preprocess_frames():
 def preprocess_additional():
     src_path = pathlib.Path("data/additional_photos/annotated")
     output_path = pathlib.Path("data/")
-    subdirs = ['obb-train', 'obb-valid', 'obb-test']
+    subdirs = ['obb_train', 'obb_valid', 'obb_test']
 
     old_schema = {
         0: 'ace',
@@ -133,7 +133,7 @@ def preprocess_additional():
     old_dice_labels = {'die'}
     for color in ['blue', 'orange', 'purple', 'red', 'yellow']:
         for i in range(1, 7):
-            old_dice_labels.add(f"{color}_i")
+            old_dice_labels.add(f"{color}_{i}")
 
     new_schema = {
         0: 'die',
