@@ -392,21 +392,25 @@ def predict_player_colors(dice_cropped, color_k_means, player_k_means, cluster_t
 
 def predict_die_value(dice_cropped, value_cls_model):
     res = value_cls_model([die for die in dice_cropped])
-    top1 = np.zeros()
-    top1conf = np.zeros()
+    n_dice = len(res)
+    top1 = np.zeros(n_dice)
+    top1conf = np.zeros(n_dice)
 
     for i,r in enumerate(res):
-        top1[i] = res.top1
-        top1conf[i] = res.top1conf
+        top1[i] = r.probs.top1
+        top1conf[i] = r.probs.top1conf
 
     return top1,top1conf
 
-class ObbShim(ultralytics.engine.results.OBB):
+class ObbShim:
+    # making this shim so we can set fields of immutable objects (e.g. setting obb.cls, which does not ordinarily have a setter)
+    # a little scuffed i think
     def __init__(self, original_res):
         self._original_res = original_res
 
     def __getattr__(self, name):
         if name == '_original_res': return self._original_res
+        return getattr(self._original_res, name)
 
 def main():
     ...
@@ -427,9 +431,10 @@ def main():
         ...
         obb_res = obb_model(frame, conf=obb_confidence)[0]
         print(obb_res.obb.cls)
-        obb_res.obb = ObbShim(obb_res.obb)
+        obb_res.obb = ObbShim(obb_res.obb) # what horrors am i committing
         print(obb_res.obb.cls)
-        obb_res.obb.cls = (obb_res.obb.cls).detach().cpu().numpy()
+        # setattribute(obb_res.obb, 'cls', (obb_res.obb.cls).detach().cpu().numpy())
+        obb_res.obb.cls = obb_res.obb.cls.detach().cpu().numpy()
         dice_indices = np.argwhere(obb_res.obb.cls == DIE)
 
         dice_cropped = batch_crop_dice(frame, obb_res, res_shape=(128,128))
@@ -463,7 +468,7 @@ def main():
         #     'dice':
         # }
 
-
+    return infer(unsupervised_imgs[0,:,:,:])
 
 
     print(infer(unsupervised_imgs[0,:,:,:]))
