@@ -19,10 +19,12 @@ def main(vid_src):
         np.stack([cv2.imread("data/misc/purple.jpg")], axis=0),
     ]
     model.train_player_vocab(unsupervised_imgs, player_imgs)
+    print("Vocab learned")
 
     tracker = DiceTracker()
     scorer = Scoring()
 
+    print("Opening video source...")
     cap = cv2.VideoCapture(vid_src)
 
     if not cap.isOpened():
@@ -75,5 +77,5 @@ def main(vid_src):
 
 if __name__ == "__main__":
     # main("./test_data/test_video_1.mp4")
-    main("video_data/rdg_gameplay_2_1.mp4")
+    main("video_data/rdg_gameplay_2_9.mp4")
     

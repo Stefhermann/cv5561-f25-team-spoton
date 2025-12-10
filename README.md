@@ -15,3 +15,6 @@ Download training videos from google drive, use `data_prep/video_data_rename.py`
 
 ### Tips for connecting camera
 Camdroid and OBS seem to work well
+
+### OpenCV dependencies
+`sudo apt install libglib2.0-0 libsm6 libxrender1 libxext6` may be required to install dependencies for opencv gui stuff
