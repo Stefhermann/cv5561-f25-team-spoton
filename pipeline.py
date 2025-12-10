@@ -5,9 +5,20 @@ from spatial_association import associate_die_card
 from tracking import DiceTracker
 from scoring import Scoring
 from visualization import draw_associations
+from classify_dice import RecognitionModel
+import numpy as np
 
 def main(vid_src):
     model = YOLO("model/rdg_obb/weights/best.pt")
+    model = RecognitionModel()
+    
+    unsupervised_imgs = np.stack([cv2.imread("data/misc/all.jpg")], axis=0)
+    player_imgs = [
+        np.stack([cv2.imread("data/misc/red.jpg")], axis=0),
+        np.stack([cv2.imread("data/misc/yellow.jpg")], axis=0),
+        np.stack([cv2.imread("data/misc/purple.jpg")], axis=0),
+    ]
+    model.train_player_vocab(unsupervised_imgs, player_imgs)
 
     tracker = DiceTracker()
     scorer = Scoring()
@@ -24,7 +35,8 @@ def main(vid_src):
             print("End of video or frame read failed.")
             break
 
-        results = model(frame, task = "obb", conf = 0.25, imgsz = 512)
+        # results = model(frame, task = "obb", conf = 0.25, imgsz = 512)
+        results = model(frame)
         res = results[0]
 
         detections = []
@@ -62,5 +74,6 @@ def main(vid_src):
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    main("./test_data/test_video_1.mp4")
+    # main("./test_data/test_video_1.mp4")
+    main("video_data/rdg_gameplay_2_1.mp4")
     

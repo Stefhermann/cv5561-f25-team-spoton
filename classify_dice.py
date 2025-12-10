@@ -412,34 +412,39 @@ class ObbShim:
         if name == '_original_res': return self._original_res
         return getattr(self._original_res, name)
 
-def main():
-    ...
-    obb_model = YOLO("model/rdg_obb/weights/best.pt")
-    value_cls_model = YOLO("classifier_models/die_number_classifier/weights/best.pt")
+class RecognitionModel:
+    def __init__(
+            self,
+            obb_model_path="model/rdg_obb/weights/best.pt",
+            value_cls_model_path="classifier_models/die_number_classifier/weights/best.pt",
+        ):
+        self.obb_model = YOLO(obb_model_path)
+        self.value_cls_model = YOLO(value_cls_model_path)
 
-    # unsupervised_imgs = np.stack(cv2.imread("data/misc/all.jpg"), axis=0)
-    unsupervised_imgs = np.stack([cv2.imread("data/misc/all.jpg")], axis=0)
-    player_imgs = [
-        np.stack([cv2.imread("data/misc/red.jpg")], axis=0),
-        np.stack([cv2.imread("data/misc/yellow.jpg")], axis=0),
-        np.stack([cv2.imread("data/misc/purple.jpg")], axis=0),
-    ]
+        self.color_k_means = None
+        self.player_k_means = None
+        self.cluster_to_player = None
 
-    color_k_means,player_k_means,cluster_to_player = fit_player_colors(obb_model, unsupervised_imgs, player_imgs, n_extra_clusters=1)
+    def __call__(self, *args, **kwargs):
+        return self.predict(*args, **kwargs)
 
-    def infer(frame, obb_confidence=0.25, value_confidence=0.55):
-        ...
-        obb_res = obb_model(frame, conf=obb_confidence)[0]
-        print(obb_res.obb.cls)
+    def train_player_vocab(self, unsupervised_imgs, player_imgs, n_extra_clusters=1):
+        self.color_k_means,self.player_k_means,self.cluster_to_player = fit_player_colors(
+            self.obb_model,
+            unsupervised_imgs,
+            player_imgs,
+            n_extra_clusters=n_extra_clusters,
+        )
+
+    def predict(self, frame, obb_confidence=0.25, value_confidence=0.55):
+        obb_res = self.obb_model(frame, conf=obb_confidence)[0]
         obb_res.obb = ObbShim(obb_res.obb) # what horrors am i committing
-        print(obb_res.obb.cls)
-        # setattribute(obb_res.obb, 'cls', (obb_res.obb.cls).detach().cpu().numpy())
         obb_res.obb.cls = obb_res.obb.cls.detach().cpu().numpy()
         dice_indices = np.argwhere(obb_res.obb.cls == DIE)
 
         dice_cropped = batch_crop_dice(frame, obb_res, res_shape=(128,128))
-        dice_players = predict_player_colors(dice_cropped, color_k_means, player_k_means, cluster_to_player)
-        dice_values,dice_val_conf = predict_die_value(dice_cropped, value_cls_model)
+        dice_players = predict_player_colors(dice_cropped, self.color_k_means, self.player_k_means, self.cluster_to_player)
+        dice_values,dice_val_conf = predict_die_value(dice_cropped, self.value_cls_model)
 
         bad_dice_mask = (
             (dice_val_conf < value_confidence) |
@@ -461,27 +466,35 @@ def main():
 
         return obb_res
 
+def main():
+    recognition_model = RecognitionModel()
 
-               
+    # unsupervised_imgs = np.stack(cv2.imread("data/misc/all.jpg"), axis=0)
+    unsupervised_imgs = np.stack([cv2.imread("data/misc/all.jpg")], axis=0)
+    player_imgs = [
+        np.stack([cv2.imread("data/misc/red.jpg")], axis=0),
+        np.stack([cv2.imread("data/misc/yellow.jpg")], axis=0),
+        np.stack([cv2.imread("data/misc/purple.jpg")], axis=0),
+    ]
 
-        # return {
-        #     'dice':
-        # }
+    recognition_model.train_player_vocab(
+        unsupervised_imgs,
+        player_imgs,
+    )
 
-    return infer(unsupervised_imgs[0,:,:,:])
+    return recognition_model.predict(unsupervised_imgs[0,:,:,:])
 
-
-    print(infer(unsupervised_imgs[0,:,:,:]))
 
 
 
 if __name__ == '__main__':
-    obb_model = YOLO("model/rdg_obb/weights/best.pt")
+    main()
+    # obb_model = YOLO("model/rdg_obb/weights/best.pt")
 
-    example_frame = "data/frames/frame_0214.jpg"
-    img = cv2.imread(example_frame)
-    # plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-    imshow(img)
+    # example_frame = "data/frames/frame_0214.jpg"
+    # img = cv2.imread(example_frame)
+    # # plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    # imshow(img)
 
 
     # res = obb_model(img, task='obb')[0]
