@@ -4,6 +4,7 @@ sys.dont_write_bytecode = True
 # %load_ext autoreload
 # %autoreload 1
 # %aimport classify_dice
+import ultralytics
 from ultralytics import YOLO
 import sklearn
 import cv2
@@ -30,6 +31,8 @@ Desired outputs (remember, MVP!!):
 """
 
 DIE = 0
+NO_PLAYER = -1
+
 
 example_frame = "data/frames/frame_0214.jpg"
 
@@ -77,21 +80,21 @@ def crop_bb(img, bb, res_shape=(128,128)):
     return cropped
 
 def batch_crop_dice(img, yolo_res, res_shape=(128,128)):
-    res = []
+    dice_cropped = []
     dice_bbs = yolo_res.obb.xyxyxyxy[yolo_res.obb.cls == DIE,:,:]
     n_dice,_,_ = dice_bbs.shape
     assert dice_bbs.shape == (n_dice, 4, 2) # (die, point, x/y) -> coord
     for die_idx in range(n_dice):
         bb = dice_bbs[die_idx,...].cpu().numpy()
         cropped = crop_bb(img, bb, res_shape)
-        res.append(cropped)
+        dice_cropped.append(cropped)
 
-    if len(res) != 0:
-        res = np.stack(res, axis=0)
+    if len(dice_cropped) != 0:
+        dice_cropped = np.stack(dice_cropped, axis=0)
     else:
-        res = np.zeros((0, res_shape[0], res_shape[1], 3))
-    assert res.shape == (n_dice, res_shape[0], res_shape[1], 3) # (die, x, y, channel) -> intensity
-    return res
+        dice_cropped = np.zeros((0, res_shape[0], res_shape[1], 3))
+    assert dice_cropped.shape == (n_dice, res_shape[0], res_shape[1], 3) # (die, x, y, channel) -> intensity
+    return dice_cropped
 
 def write_dice():
     all_dice = np.load('data/dice/all_dice.npz')['arr_0']
@@ -365,17 +368,106 @@ def fit_player_colors(obb_model, unsupervised_dice_imgs, player_dice_imgs, palet
 
     return color_k_means,player_k_means,cluster_to_player
 
-def predict_player_colors(img, obb_res, color_k_means, player_k_means, cluster_to_player:dict ):
-    dice_cropped = batch_crop_dice(img, obb_res)
+def predict_player_colors(dice_cropped, color_k_means, player_k_means, cluster_to_player: dict):
     n_dice,H,W,_ = dice_cropped.shape
     assert dice_cropped.shape == (n_dice,H,W,3)
 
     histograms = dice_to_histograms(dice_cropped, color_k_means)
     cluster_memberships = player_k_means.predict(histograms)
-    NO_PLAYER = -1
     cluster_to_player_v = np.vectorize(lambda x: cluster_to_player.get(x, NO_PLAYER))
     player_assignments = cluster_to_player_v(cluster_memberships)
     return player_assignments
+
+# def predict_player_colors(img, obb_res, color_k_means, player_k_means, cluster_to_player: dict):
+#     dice_cropped = batch_crop_dice(img, obb_res)
+#     n_dice,H,W,_ = dice_cropped.shape
+#     assert dice_cropped.shape == (n_dice,H,W,3)
+
+#     histograms = dice_to_histograms(dice_cropped, color_k_means)
+#     cluster_memberships = player_k_means.predict(histograms)
+#     NO_PLAYER = -1
+#     cluster_to_player_v = np.vectorize(lambda x: cluster_to_player.get(x, NO_PLAYER))
+#     player_assignments = cluster_to_player_v(cluster_memberships)
+#     return player_assignments
+
+def predict_die_value(dice_cropped, value_cls_model):
+    res = value_cls_model([die for die in dice_cropped])
+    top1 = np.zeros()
+    top1conf = np.zeros()
+
+    for i,r in enumerate(res):
+        top1[i] = res.top1
+        top1conf[i] = res.top1conf
+
+    return top1,top1conf
+
+class ObbShim(ultralytics.engine.results.OBB):
+    def __init__(self, original_res):
+        self._original_res = original_res
+
+    def __getattr__(self, name):
+        if name == '_original_res': return self._original_res
+
+def main():
+    ...
+    obb_model = YOLO("model/rdg_obb/weights/best.pt")
+    value_cls_model = YOLO("classifier_models/die_number_classifier/weights/best.pt")
+
+    # unsupervised_imgs = np.stack(cv2.imread("data/misc/all.jpg"), axis=0)
+    unsupervised_imgs = np.stack([cv2.imread("data/misc/all.jpg")], axis=0)
+    player_imgs = [
+        np.stack([cv2.imread("data/misc/red.jpg")], axis=0),
+        np.stack([cv2.imread("data/misc/yellow.jpg")], axis=0),
+        np.stack([cv2.imread("data/misc/purple.jpg")], axis=0),
+    ]
+
+    color_k_means,player_k_means,cluster_to_player = fit_player_colors(obb_model, unsupervised_imgs, player_imgs, n_extra_clusters=1)
+
+    def infer(frame, obb_confidence=0.25, value_confidence=0.55):
+        ...
+        obb_res = obb_model(frame, conf=obb_confidence)[0]
+        print(obb_res.obb.cls)
+        obb_res.obb = ObbShim(obb_res.obb)
+        print(obb_res.obb.cls)
+        obb_res.obb.cls = (obb_res.obb.cls).detach().cpu().numpy()
+        dice_indices = np.argwhere(obb_res.obb.cls == DIE)
+
+        dice_cropped = batch_crop_dice(frame, obb_res, res_shape=(128,128))
+        dice_players = predict_player_colors(dice_cropped, color_k_means, player_k_means, cluster_to_player)
+        dice_values,dice_val_conf = predict_die_value(dice_cropped, value_cls_model)
+
+        bad_dice_mask = (
+            (dice_val_conf < value_confidence) |
+            (dice_players == NO_PLAYER)
+        )
+        
+        objects_to_exclude = dice_indices[bad_dice_mask]
+        # hacky method but gets the job done
+        obb_res.obb.cls[objects_to_exclude] = -1
+
+        INVALID = -1
+        for die,obj_idx in enumerate(dice_indices):
+            if bad_dice_mask[die]:
+                obb_res.obb.cls[obj_idx] = INVALID
+            else:
+                player = dice_players[die]
+                value = dice_values[die]
+                obb_res.obb.cls[obj_idx] = f"{player}_{value}"
+
+        return obb_res
+
+
+               
+
+        # return {
+        #     'dice':
+        # }
+
+
+
+
+    print(infer(unsupervised_imgs[0,:,:,:]))
+
 
 
 if __name__ == '__main__':
