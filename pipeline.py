@@ -50,13 +50,14 @@ def main(vid_src):
         res = results
 
         detections = []
-        for b in res.obb:
-            x1, y1, x2, y2 = b.xyxy[0]
+        print(res.obb)
+        for i,_ in enumerate(res.obb):
+            x1, y1, x2, y2 = res.obb.xyxy[i,...]
             detections.append(
                 {
                     "bbox": [float(x1), float(y1), float(x2), float(y2)],
-                    "cls": int(b.cls.item()),
-                    "comf": float(b.conf.item()),
+                    "cls": int(res.obb.cls[i]),
+                    "comf": float(res.obb.conf[i].item()),
                 }
             )
 
