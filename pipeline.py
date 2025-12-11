@@ -62,5 +62,5 @@ def main(vid_src):
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    main("./test_data/test_video_1.mp4")
+    main("./test_data/test_video_8.mp4")
     

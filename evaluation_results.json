@@ -1,46 +1,46 @@
 {
-  "timestamp": "2025-12-09T09:03:08.319823",
+  "timestamp": "2025-12-10T19:24:45.828322",
   "summary": {
     "n_games": 8,
     "exact_match_accuracy": 0.0,
-    "total_mae": 12.333333333333334,
-    "total_rmse": 12.767145334803704
+    "total_mae": 5.333333333333333,
+    "total_rmse": 7.302967433402215
   },
   "per_player": {
     "blue": {
       "accuracy": 0.0,
-      "mae": 16.0,
-      "rmse": 16.0
+      "mae": 4.0,
+      "rmse": 4.0
     },
     "red": {
-      "accuracy": 0.0,
-      "mae": 8.0,
-      "rmse": 8.0
+      "accuracy": 12.5,
+      "mae": 0.0,
+      "rmse": 0.0
     },
     "yellow": {
       "accuracy": 0.0,
-      "mae": 13.0,
-      "rmse": 13.0
+      "mae": 12.0,
+      "rmse": 12.0
     }
   },
   "game_results": [
     {
       "game": 1,
       "actual": {
-        "blue": 12,
-        "red": 8,
-        "yellow": 15
+        "blue": 4,
+        "red": 0,
+        "yellow": 12
       },
       "predicted": {
-        "blue": 28,
+        "blue": 0,
         "red": 0,
-        "yellow": 28
+        "yellow": 0
       },
       "exact_match": false,
       "errors": {
-        "blue": 16,
-        "red": -8,
-        "yellow": 13
+        "blue": -4,
+        "red": 0,
+        "yellow": -12
       }
     }
   ],

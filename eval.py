@@ -317,14 +317,14 @@ def main():
     
     # Ground truth scores: [blue, red, yellow] for each game
     actual_scores = [
+        [4, 0, 12],    # test_video_4
+        [12, 0, 18],    # test_video_2
+        [0, 0, 45],    # test_video_3
         [44, 0, 0],    # test_video_4
-        # [20, 12, 6],    # test_video_2
-        # [0, 24, 10],    # test_video_3
-        # [18, 0, 18],    # test_video_4
-        # [6, 15, 12],    # test_video_5
-        # [24, 20, 8],    # test_video_6
-        # [10, 6, 20],    # test_video_7
-        # [15, 18, 0],    # test_video_8
+        [14, 0, 2],    # test_video_5
+        [22, 6, 0],    # test_video_6
+        [12, 2, 0],    # test_video_7
+        [12, 2, 0],    # test_video_8
     ]
     
     # Process all videos
@@ -333,9 +333,9 @@ def main():
     
     predicted_scores = []
     
-    # for i in range(1, 2):
-    video_path = "./test_data/test_video_4.mp4"
-        # print(f"\nProcessing test_video_{i}.mp4...")
+    for i in range(1, 9):
+        video_path = f"./test_data/test_video_{i}.mp4"
+        print(f"\nProcessing test_video_{i}.mp4...")
         
     try:
         scores = process_single_video(video_path, enable_class_dedup=True, verbose=True)
