@@ -53,9 +53,11 @@ def main(vid_src):
         print(res.obb._original_res.cls)
         for i, _ in enumerate(res.obb):
             x1, y1, x2, y2 = res.obb.xyxy[i, ...]
+            # print(f"{res.obb.xyxyxyxy.shape=}")
             detections.append(
                 {
                     "bbox": [float(x1), float(y1), float(x2), float(y2)],
+                    "xyxyxyxy": res.obb.xyxyxyxy[i,...],
                     "cls": int(res.obb.cls[i]),
                     "comf": float(res.obb.conf[i].item()),
                 }

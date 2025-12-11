@@ -127,7 +127,7 @@ def write_dice():
 
 def kmeans_color(dice_cropped, k=16):
     N, H, W, C = dice_cropped.shape
-    k_means = sklearn.cluster.KMeans(n_clusters=k, random_state=1338, n_init=20)
+    k_means = sklearn.cluster.KMeans(n_clusters=k, random_state=1338, n_init=3)
 
     colors_only = einops.rearrange(dice_cropped, "N H W C -> (N H W) C")
     k_means = k_means.fit(colors_only)
@@ -247,7 +247,7 @@ def load_labeled_dice():
 def kmeans_cluster_players(histograms, n_players):
     """will hopefully provdie pretty good guesss of player assignments for each die"""
     player_k_means = sklearn.cluster.KMeans(
-        n_clusters=n_players, random_state=1338, n_init=20
+        n_clusters=n_players, random_state=1338, n_init=3
     )  # `n_init=10` might be overkill
 
     player_k_means = player_k_means.fit(histograms)
@@ -398,7 +398,7 @@ def fit_player_colors(
         show_imgs_grid(all_dice_cropped[is_member, :, :, :])
         print(f"{class_labels[is_member]=}")
         classes_present = np.unique(class_labels[is_member])
-        print(f"classes_present=")
+        print(f"{classes_present=}")
         unique,counts = np.unique(class_labels[is_member], return_counts=True)
 
         if np.max(counts) > 0.7 * np.sum(is_member):

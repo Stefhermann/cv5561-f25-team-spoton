@@ -1,15 +1,18 @@
 import cv2
+import numpy as np
 from spatial_association import CARD_CLASSES
 
 def draw_associations(frame, associations, detections, names, tracked_dice = None, scores = None):
     for det in detections:
         x1, y1, x2, y2 = map(int, det["bbox"])
+        xyxyxyxy = det["xyxyxyxy"].cpu().numpy().astype(np.int32)
 
         cls_name = names[det["cls"]]
 
         color = (0, 255, 0) if cls_name in CARD_CLASSES else (255, 0, 0)
 
-        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        #cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        cv2.polylines(frame, [xyxyxyxy], True, color, 2)
         cv2.putText(frame, cls_name, (x1, y1-8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
     for a in associations:
