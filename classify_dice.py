@@ -462,6 +462,8 @@ class ObbShim:
             return self._original_res
         return getattr(self._original_res, name)
 
+    def __iter__(self):
+        yield from self._original_res
 
 class RecognitionModel:
     def __init__(
