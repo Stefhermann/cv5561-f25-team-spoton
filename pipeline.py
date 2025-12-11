@@ -1,17 +1,18 @@
 import cv2
+import numpy as np
 from ultralytics import YOLO
 
+from classify_dice import RecognitionModel
+from scoring import Scoring
 from spatial_association import associate_die_card
 from tracking import DiceTracker
-from scoring import Scoring
 from visualization import draw_associations
-from classify_dice import RecognitionModel
-import numpy as np
+
 
 def main(vid_src):
-    model = YOLO("model/rdg_obb/weights/best.pt")
+    # model = YOLO("model/rdg_obb6/weights/best.pt")
     model = RecognitionModel()
-    
+
     unsupervised_imgs = np.stack([cv2.imread("data/misc/all.jpg")], axis=0)
     player_imgs = [
         np.stack([cv2.imread("data/misc/red.jpg")], axis=0),
@@ -32,29 +33,32 @@ def main(vid_src):
         return
 
     frame_num = -1
-    
+
     while True:
         ret, frame = cap.read()
         if not ret or frame is None:
             print("End of video or frame read failed.")
             break
         frame_num += 1
-        if frame_num < 340: continue
+        if frame_num < 340:
+            continue
 
         print(f"==== Frame {frame_num} ====")
 
         # results = model(frame, task = "obb", conf = 0.25, imgsz = 512)
         results = model(frame)
-        res = results[0]
+        res = results
 
         detections = []
         for b in res.obb:
             x1, y1, x2, y2 = b.xyxy[0]
-            detections.append({
-                "bbox": [float(x1), float(y1), float(x2), float(y2)],
-                "cls": int(b.cls.item()),
-                "comf": float(b.conf.item())
-            })
+            detections.append(
+                {
+                    "bbox": [float(x1), float(y1), float(x2), float(y2)],
+                    "cls": int(b.cls.item()),
+                    "comf": float(b.conf.item()),
+                }
+            )
 
         associations = associate_die_card(detections, res.names)
 
@@ -62,26 +66,25 @@ def main(vid_src):
         for det in detections:
             cls_name = res.names[det["cls"]]
             if "_" in cls_name:
-                dice_inputs.append({
-                    "class": cls_name,
-                    "bbox": det["bbox"]
-                })
-        
+                dice_inputs.append({"class": cls_name, "bbox": det["bbox"]})
+
         tracked_dice = tracker.update(dice_inputs)
 
         scores = scorer.update_scores(tracked_dice, associations)
 
-        frame_out = draw_associations(frame.copy(), associations, detections, res.names, tracked_dice, scores)
+        frame_out = draw_associations(
+            frame.copy(), associations, detections, res.names, tracked_dice, scores
+        )
 
         cv2.imshow("🎲♠️ Rhubarb Dice Game Real Time Scoring", frame_out)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
-    
+
     cap.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     # main("./test_data/test_video_1.mp4")
     main("video_data/rdg_gameplay_2_9.mp4")
-    
