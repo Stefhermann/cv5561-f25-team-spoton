@@ -19,7 +19,7 @@ def main(vid_src):
         np.stack([cv2.imread("data/misc/yellow.jpg")], axis=0),
         np.stack([cv2.imread("data/misc/purple.jpg")], axis=0),
     ]
-    model.train_player_vocab(unsupervised_imgs, player_imgs)
+    model.train_player_vocab(unsupervised_imgs, player_imgs, n_extra_clusters=1)
     print("Vocab learned")
 
     tracker = DiceTracker()
@@ -40,7 +40,7 @@ def main(vid_src):
             print("End of video or frame read failed.")
             break
         frame_num += 1
-        if frame_num < 340:
+        if frame_num < 540:
             continue
 
         print(f"==== Frame {frame_num} ====")
@@ -50,7 +50,7 @@ def main(vid_src):
         res = results
 
         detections = []
-        print(res.obb._original_res)
+        print(res.obb._original_res.cls)
         for i, _ in enumerate(res.obb):
             x1, y1, x2, y2 = res.obb.xyxy[i, ...]
             detections.append(
@@ -77,7 +77,8 @@ def main(vid_src):
             frame.copy(), associations, detections, res.names, tracked_dice, scores
         )
 
-        cv2.imshow("🎲♠️ Rhubarb Dice Game Real Time Scoring", frame_out)
+        # cv2.imshow("🎲♠️ Rhubarb Dice Game Real Time Scoring", frame_out)
+        cv2.imshow("Rhubarb Dice Game Real Time Scoring", frame_out)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
@@ -88,4 +89,4 @@ def main(vid_src):
 
 if __name__ == "__main__":
     # main("./test_data/test_video_1.mp4")
-    main("video_data/rdg_gameplay_2_9.mp4")
+    main("video_data/rdg_gameplay_2_11.mp4")

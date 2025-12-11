@@ -114,7 +114,7 @@ def write_dice():
     out_path = pathlib.Path("data/dice/all_dice/")
     label_path = pathlib.Path("data/dice/labeled")
     n_dice = all_dice.shape[0]
-    np.random.seed(1337)
+    np.random.seed(1338)
     to_label = set(x.item() for x in np.random.permutation(n_dice)[:200])
     print(to_label)
     for die_idx in range(n_dice):
@@ -127,7 +127,7 @@ def write_dice():
 
 def kmeans_color(dice_cropped, k=16):
     N, H, W, C = dice_cropped.shape
-    k_means = sklearn.cluster.KMeans(n_clusters=k, random_state=1337, n_init=10)
+    k_means = sklearn.cluster.KMeans(n_clusters=k, random_state=1338, n_init=20)
 
     colors_only = einops.rearrange(dice_cropped, "N H W C -> (N H W) C")
     k_means = k_means.fit(colors_only)
@@ -247,7 +247,7 @@ def load_labeled_dice():
 def kmeans_cluster_players(histograms, n_players):
     """will hopefully provdie pretty good guesss of player assignments for each die"""
     player_k_means = sklearn.cluster.KMeans(
-        n_clusters=n_players, random_state=1337, n_init=10
+        n_clusters=n_players, random_state=1338, n_init=20
     )  # `n_init=10` might be overkill
 
     player_k_means = player_k_means.fit(histograms)
@@ -262,7 +262,7 @@ def fit_player_svm(histograms, label_train, n_players):
     svms = []
     for cls in range(n_players):
         in_class = np.where(label_train == cls, 1, -1)
-        svm = sklearn.svm.LinearSVC(C=1.0, max_iter=2000, random_state=1337)
+        svm = sklearn.svm.LinearSVC(C=1.0, max_iter=2000, random_state=1338)
         svm.fit(histograms, in_class)
         svms.append(svm)
     return svms
@@ -378,31 +378,39 @@ def fit_player_colors(
     )
 
     # debug: visualize
-    pca = sklearn.decomposition.PCA(n_components=2, whiten=True, random_state=1337)
+    pca = sklearn.decomposition.PCA(n_components=2, whiten=True, random_state=1338)
     hist_pca = pca.fit_transform(histograms)
-    # plt.figure()
-    # plt.scatter(hist_pca[:,0], hist_pca[:,1], c=class_labels)
-    # plt.colorbar()
-    # plt.title("Draft player assignments")
-    # plt.figure()
-    # plt.scatter(hist_pca[:,0], hist_pca[:,1], c=cluster_assignments)
-    # plt.title("Cluster assignments")
-    # plt.colorbar()
+    plt.figure()
+    plt.scatter(hist_pca[:,0], hist_pca[:,1], c=class_labels)
+    plt.colorbar()
+    plt.title("Draft player assignments")
+    plt.show()
+    plt.figure()
+    plt.scatter(hist_pca[:,0], hist_pca[:,1], c=cluster_assignments)
+    plt.title("Cluster assignments")
+    plt.colorbar()
+    plt.show()
 
     cluster_to_player = {}
     for cluster_id in range(n_players + n_extra_clusters):
         is_member = cluster_assignments == cluster_id
         plt.figure()
         show_imgs_grid(all_dice_cropped[is_member, :, :, :])
-        print(class_labels[is_member])
+        print(f"{class_labels[is_member]=}")
         classes_present = np.unique(class_labels[is_member])
-        print(classes_present)
-        if len(classes_present) == 1:
-            cluster_to_player[cluster_id] = classes_present.item()
+        print(f"classes_present=")
+        unique,counts = np.unique(class_labels[is_member], return_counts=True)
+
+        if np.max(counts) > 0.7 * np.sum(is_member):
+        # if len(classes_present) == 1:
+            mode = unique[np.argmax(counts)]
+            cluster_to_player[cluster_id] = mode
+            print(f"Cluster {cluster_id} members (>70%) -> Player {mode}")
             plt.title(
-                f"Cluster {cluster_id} members (homogeneous) -> Player {classes_present.item()}"
+                f"Cluster {cluster_id} members (homogeneous) -> Player {mode}"
             )
         else:
+            print(f"Cluster {cluster_id} members (heterogeneous)")
             plt.title(f"Cluster {cluster_id} members (heterogeneous)")
     print(f"{cluster_to_player=}")
 
@@ -420,8 +428,18 @@ def predict_player_colors(
 
     histograms = dice_to_histograms(dice_cropped, color_k_means)
     cluster_memberships = player_k_means.predict(histograms)
-    cluster_to_player_v = np.vectorize(lambda x: cluster_to_player.get(x, NO_PLAYER))
-    player_assignments = cluster_to_player_v(cluster_memberships)
+    # cluster_to_player_v = np.vectorize(lambda x: cluster_to_player.get(x, NO_PLAYER))
+
+    player_assignments = np.zeros(cluster_memberships.shape[0])
+    print(f"{cluster_to_player=}")
+    print(f"{cluster_memberships=}")
+    for i in range(cluster_memberships.shape[0]):
+        player_assignments[i] = cluster_to_player.get(cluster_memberships[i], NO_PLAYER)
+    print(f"{player_assignments=}")
+
+    # player_assignments = cluster_to_player_v(cluster_memberships)
+
+
     return player_assignments
 
 
@@ -445,8 +463,11 @@ def predict_die_value(dice_cropped, value_cls_model):
     top1conf = np.zeros(n_dice)
 
     for i, r in enumerate(res):
+        # print(f"{i=},{r.probs=}")
         top1[i] = r.probs.top1
         top1conf[i] = r.probs.top1conf
+
+    print(f"{top1,top1conf=}")
 
     return top1, top1conf
 
@@ -487,7 +508,7 @@ class RecognitionModel:
             4: "four",
         }
         for i, p in enumerate(["red", "yellow", "blue"]):
-            for v in range(1, 6):
+            for v in range(1, 7):
                 self.class_names[self.dice_to_class(i, v)] = f"{p}_{v}"
 
     def __call__(self, *args, **kwargs):
@@ -506,7 +527,7 @@ class RecognitionModel:
     def dice_to_class(self, player, value):
         return (player + 1) * 10 + value
 
-    def predict(self, frame, obb_confidence=0.25, value_confidence=0.55):
+    def predict(self, frame, obb_confidence=0.15, value_confidence=0.0):
         obb_res = self.obb_model(frame, conf=obb_confidence, verbose=False)[0]
         obb_res.obb = ObbShim(obb_res.obb)  # what horrors am i committing
         obb_res.obb.cls = obb_res.obb.cls.detach().cpu().numpy()
@@ -527,7 +548,10 @@ class RecognitionModel:
             dice_cropped, self.value_cls_model
         )
 
+        print(dice_val_conf)
+        print(dice_players)
         bad_dice_mask = (dice_val_conf < value_confidence) | (dice_players == NO_PLAYER)
+        print(bad_dice_mask)
 
         objects_to_exclude = dice_indices[bad_dice_mask]
         # hacky method but gets the job done
