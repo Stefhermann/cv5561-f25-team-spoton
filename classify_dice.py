@@ -145,11 +145,14 @@ def dice_to_histograms(dice_cropped, k_means):
     n_dice,H,W,C = dice_cropped.shape
     assert C == 3
 
+    palette_size = k_means.n_clusters
+    if n_dice == 0:
+        return np.zeros((0, palette_size))
+    
     flat_in = einops.rearrange(dice_cropped, "N H W C -> (N H W) C")
     flat_out = k_means.predict(flat_in)
     color_classes_flattened = einops.rearrange(flat_out, "(N H W) -> N (H W)", N=n_dice, H=H, W=W)
     
-    palette_size = k_means.n_clusters
     histograms = np.zeros((n_dice, palette_size))
 
     for die_idx in range(n_dice): # TODO: vectorize?
@@ -298,12 +301,12 @@ def fit_player_colors(obb_model, unsupervised_dice_imgs, player_dice_imgs, palet
         n_imgs,H,W,_ = player_dice_imgs[p].shape
         assert player_dice_imgs[p].shape == (n_imgs, H, W, C)
 
-        # debug: view all images for this player
-        print(p)
-        plt.figure()
-        show_imgs_grid(player_dice_imgs[p], width=1)
-        plt.title(f"Player {p} images")
-        plt.show()
+        # # debug: view all images for this player
+        # print(p)
+        # plt.figure()
+        # show_imgs_grid(player_dice_imgs[p], width=1)
+        # plt.title(f"Player {p} images")
+        # plt.show()
 
         for img_idx in range(n_imgs):
             labeled_img = player_dice_imgs[p][img_idx,:,:,:]
@@ -314,11 +317,11 @@ def fit_player_colors(obb_model, unsupervised_dice_imgs, player_dice_imgs, palet
             assert labeled_dice_cropped.shape == (n_dice, H, W, C)
             all_dice_cropped.append(labeled_dice_cropped)
 
-            # debug: view dice in this image
-            plt.figure()
-            show_imgs_grid(labeled_dice_cropped)
-            plt.title(f"Dice in image")
-            plt.show()
+            # # debug: view dice in this image
+            # plt.figure()
+            # show_imgs_grid(labeled_dice_cropped)
+            # plt.title(f"Dice in image")
+            # plt.show()
             
             curr_histograms = dice_to_histograms(labeled_dice_cropped, color_k_means)
             curr_class_labels = np.array([p] * n_dice)
@@ -330,10 +333,10 @@ def fit_player_colors(obb_model, unsupervised_dice_imgs, player_dice_imgs, palet
     histograms = np.concat(histograms, axis=0)    
     class_labels = np.concat(class_labels, axis=0)
 
-    print(f"{all_dice_cropped.shape=}")
-    plt.figure()
-    show_imgs_grid(all_dice_cropped)
-    plt.title("Dice found in `player_dice_imgs`")
+    # print(f"{all_dice_cropped.shape=}")
+    # plt.figure()
+    # show_imgs_grid(all_dice_cropped)
+    # plt.title("Dice found in `player_dice_imgs`")
 
     player_k_means,cluster_assignments = kmeans_cluster_players(
         histograms=histograms,
@@ -343,14 +346,14 @@ def fit_player_colors(obb_model, unsupervised_dice_imgs, player_dice_imgs, palet
     # debug: visualize
     pca = sklearn.decomposition.PCA(n_components=2, whiten=True, random_state=1337)
     hist_pca = pca.fit_transform(histograms)
-    plt.figure()
-    plt.scatter(hist_pca[:,0], hist_pca[:,1], c=class_labels)
-    plt.colorbar()
-    plt.title("Draft player assignments")
-    plt.figure()
-    plt.scatter(hist_pca[:,0], hist_pca[:,1], c=cluster_assignments)
-    plt.title("Cluster assignments")
-    plt.colorbar()
+    # plt.figure()
+    # plt.scatter(hist_pca[:,0], hist_pca[:,1], c=class_labels)
+    # plt.colorbar()
+    # plt.title("Draft player assignments")
+    # plt.figure()
+    # plt.scatter(hist_pca[:,0], hist_pca[:,1], c=cluster_assignments)
+    # plt.title("Cluster assignments")
+    # plt.colorbar()
 
     cluster_to_player = {}
     for cluster_id in range(n_players+n_extra_clusters):
@@ -372,6 +375,9 @@ def predict_player_colors(dice_cropped, color_k_means, player_k_means, cluster_t
     n_dice,H,W,_ = dice_cropped.shape
     assert dice_cropped.shape == (n_dice,H,W,3)
 
+    if n_dice == 0:   
+        return np.zeros((n_dice,))
+
     histograms = dice_to_histograms(dice_cropped, color_k_means)
     cluster_memberships = player_k_means.predict(histograms)
     cluster_to_player_v = np.vectorize(lambda x: cluster_to_player.get(x, NO_PLAYER))
@@ -391,7 +397,7 @@ def predict_player_colors(dice_cropped, color_k_means, player_k_means, cluster_t
 #     return player_assignments
 
 def predict_die_value(dice_cropped, value_cls_model):
-    res = value_cls_model([die for die in dice_cropped])
+    res = value_cls_model([die for die in dice_cropped], verbose=False)
     n_dice = len(res)
     top1 = np.zeros(n_dice)
     top1conf = np.zeros(n_dice)
@@ -425,6 +431,18 @@ class RecognitionModel:
         self.player_k_means = None
         self.cluster_to_player = None
 
+
+        self.class_names = {
+            -1: 'INVALID',
+            1: 'ace',
+            2: 'two',
+            3: 'three',
+            4: 'four',
+        }
+        for p in range(3):
+            for v in range(1,6):
+                self.class_names[self.dice_to_class(p, v)] = "P{p}: {v}"
+
     def __call__(self, *args, **kwargs):
         return self.predict(*args, **kwargs)
 
@@ -436,11 +454,18 @@ class RecognitionModel:
             n_extra_clusters=n_extra_clusters,
         )
 
+    def dice_to_class(self, player, value):
+        return (player+1)*10+value
+
     def predict(self, frame, obb_confidence=0.25, value_confidence=0.55):
-        obb_res = self.obb_model(frame, conf=obb_confidence)[0]
+        obb_res = self.obb_model(frame, conf=obb_confidence, verbose=False)[0]
         obb_res.obb = ObbShim(obb_res.obb) # what horrors am i committing
         obb_res.obb.cls = obb_res.obb.cls.detach().cpu().numpy()
         dice_indices = np.argwhere(obb_res.obb.cls == DIE)
+
+        n_dice = dice_indices.shape[0]
+        if n_dice == 0:
+            return obb_res
 
         dice_cropped = batch_crop_dice(frame, obb_res, res_shape=(128,128))
         dice_players = predict_player_colors(dice_cropped, self.color_k_means, self.player_k_means, self.cluster_to_player)
@@ -456,13 +481,20 @@ class RecognitionModel:
         obb_res.obb.cls[objects_to_exclude] = -1
 
         INVALID = -1
+        obb_res.names = self.class_names
+
         for die,obj_idx in enumerate(dice_indices):
             if bad_dice_mask[die]:
                 obb_res.obb.cls[obj_idx] = INVALID
             else:
                 player = dice_players[die]
                 value = dice_values[die]
-                obb_res.obb.cls[obj_idx] = f"{player}_{value}"
+                # obb_res.obb.cls[obj_idx] = f"{player}_{value}"
+                class_idx = self.dice_to_class(player, value)
+                obb_res.obb.cls[obj_idx] = class_idx
+                # scuffed and could be optimized
+                if class_idx not in self.class_names:
+                    self.class_names
 
         return obb_res
 

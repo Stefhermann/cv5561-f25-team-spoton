@@ -30,12 +30,18 @@ def main(vid_src):
     if not cap.isOpened():
         print("Video Source not detected")
         return
+
+    frame_num = -1
     
     while True:
         ret, frame = cap.read()
         if not ret or frame is None:
             print("End of video or frame read failed.")
             break
+        frame_num += 1
+        if frame_num < 340: continue
+
+        print(f"==== Frame {frame_num} ====")
 
         # results = model(frame, task = "obb", conf = 0.25, imgsz = 512)
         results = model(frame)
