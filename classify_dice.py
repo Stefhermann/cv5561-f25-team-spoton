@@ -465,6 +465,7 @@ class ObbShim:
     def __iter__(self):
         yield from self._original_res
 
+
 class RecognitionModel:
     def __init__(
         self,
@@ -485,9 +486,9 @@ class RecognitionModel:
             3: "three",
             4: "four",
         }
-        for p in range(3):
+        for i, p in enumerate(["red", "yellow", "blue"]):
             for v in range(1, 6):
-                self.class_names[self.dice_to_class(p, v)] = "P{p}_{v}"
+                self.class_names[self.dice_to_class(i, v)] = f"{p}_{v}"
 
     def __call__(self, *args, **kwargs):
         return self.predict(*args, **kwargs)
@@ -542,7 +543,7 @@ class RecognitionModel:
                 player = dice_players[die]
                 value = dice_values[die]
                 # obb_res.obb.cls[obj_idx] = f"{player}_{value}"
-                class_idx = self.dice_to_class(player, value)
+                class_idx = self.dice_to_class(player, value + 1)
                 obb_res.obb.cls[obj_idx] = class_idx
                 # scuffed and could be optimized
                 if class_idx not in self.class_names:
