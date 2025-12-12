@@ -29,7 +29,7 @@ Camdroid and OBS seem to work well
 
 ## Methods
 
-- Recognition (`classify_dice.py`)
+- Recognition (`recognition.py`)
 Bounding boxes (with classes `die`, `ace`, `two`, `three`, `four`) are via YOLOv8-obb. Dice are then further classified by the player classifier (color-based via $k$-means) and the value classifier (YOLOv8-cls). The recognition pipeline outputs classified bounding boxes (classes: `ace`, `two`, `three`, `four`, `red_1`, `red_2`, ..., `blue_5`, `blue_6`, and `INVALID_DIE`).
 
 - State tracking and scoring (`spatial_association.py`, `tracking.py`, `scoring.py`)

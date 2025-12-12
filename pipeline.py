@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-from classify_dice import RecognitionModel
+from recognition import RecognitionModel
 from scoring import Scoring
 from spatial_association import associate_die_card
 from tracking import DiceTracker
