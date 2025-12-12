@@ -13,7 +13,7 @@ uv pip install -r requirements.txt # TODO: simplify requirements.txt
 `sudo apt install libglib2.0-0 libsm6 libxrender1 libxext6` may be required to install dependencies for opencv gui stuff
 
 #### Data
-Copy the contents of [this google drive folder](https://drive.google.com/drive/folders/1VSm9NnftphKB87fiTHYBRZ7yb-MMln61?usp=sharing) into `/video_data`, then run `python data_prep/video_data_rename.py` to rename/rearrange these videos to the format expected by the project.
+Copy the contents of [this google drive folder](https://drive.google.com/drive/folders/1VSm9NnftphKB87fiTHYBRZ7yb-MMln61?usp=sharing) into `video_data/`, then run `python data_prep/video_data_rename.py` to rename/rearrange these videos to the format expected by the project.
 
 ### Running
 `python pipeline.py` to run on example video.

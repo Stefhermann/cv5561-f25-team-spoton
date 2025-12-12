@@ -1,15 +1,11 @@
 import pathlib
 import sys
 
-sys.dont_write_bytecode = True
 import cv2
 import einops
 import numpy as np
 import sklearn
 
-# %load_ext autoreload
-# %autoreload 1
-# %aimport classify_dice
 import ultralytics
 from matplotlib import pyplot as plt
 from ultralytics import YOLO
@@ -40,6 +36,9 @@ example_frame = "data/frames/frame_0214.jpg"
 
 
 def show_imgs_grid(imgs, width=10):
+    """
+    Just a util for quickly visualizing a stack of images as a grid
+    """
     imgs = imgs.copy()
     N, H, W, C = imgs.shape
     slots_missing = (-N) % width
@@ -52,6 +51,10 @@ def show_imgs_grid(imgs, width=10):
 
 
 def generate_dice_dataset(obb_model):
+    """
+    Util for prototyping and training dice face classifier: 
+    Uses the obb model to crop out all dice from the `data/frames` directory and writes them to `data/dice` for be manually annotated into training data
+    """
     frames_path = pathlib.Path("data/frames")
     dice_path = pathlib.Path("data/dice")
 
@@ -73,6 +76,9 @@ def imshow(img):
 
 
 def crop_bb(img, bb, res_shape=(128, 128)):
+    """
+    Util: crop/warp the the bounding box `bb` from image `img` into shape `res_shape`
+    """
     res_points = np.array(
         [
             [0, 0],
@@ -87,6 +93,10 @@ def crop_bb(img, bb, res_shape=(128, 128)):
 
 
 def batch_crop_dice(img, yolo_res, res_shape=(128, 128)):
+    """
+    Given image `img`, crop/warp out all the dice (specified in the yolo obb result `yolo_res`
+    Returns a stack of all these images
+    """
     dice_cropped = []
     dice_bbs = yolo_res.obb.xyxyxyxy[yolo_res.obb.cls == DIE, :, :]
     n_dice, _, _ = dice_bbs.shape
@@ -110,6 +120,9 @@ def batch_crop_dice(img, yolo_res, res_shape=(128, 128)):
 
 
 def write_dice():
+    """
+    Function used in prototyping time to select a subset of the dice and write them to a directory for annotation to train the die face classifier
+    """
     all_dice = np.load("data/dice/all_dice.npz")["arr_0"]
     out_path = pathlib.Path("data/dice/all_dice/")
     label_path = pathlib.Path("data/dice/labeled")
@@ -126,6 +139,9 @@ def write_dice():
 
 
 def kmeans_color(dice_cropped, k=16):
+    """
+    Use k means to cluster all the colors present in the dice images `dice_cropped` to create a color palette. This color palette will be used to create lower-dimensional embeddings of die images (as histograms of these colors).
+    """
     N, H, W, C = dice_cropped.shape
     k_means = sklearn.cluster.KMeans(n_clusters=k, random_state=1338, n_init=3)
 
@@ -136,9 +152,6 @@ def kmeans_color(dice_cropped, k=16):
     for c_idx in range(k_means.cluster_centers_.shape[0]):
         color = k_means.cluster_centers_[c_idx, :]
         palette.append(color)
-        # plt.figure()
-        # classify_dice.imshow(color.reshape(1,1,3).astype(np.uint8))
-        # plt.show()
     palette = np.stack(palette, axis=0).astype(np.uint8)
     # imshow(einops.rearrange(palette, "(h w) C -> h w C", w=8))
 
@@ -146,6 +159,10 @@ def kmeans_color(dice_cropped, k=16):
 
 
 def posterize(dice_cropped, k_means, palette):
+    """
+    (Unused in final pipeline. Is a useful util for protyping, though.)
+    Recolor all the images in `dice_cropped` by fitting them to the color palette specified by `k_means` and `palette`.
+    """
     N, H, W, C = dice_cropped.shape
     assert C == 3
     flat_in = einops.rearrange(dice_cropped, "N H W C -> (N H W) C")
@@ -160,6 +177,9 @@ def posterize(dice_cropped, k_means, palette):
 
 
 def dice_to_histograms(dice_cropped, k_means):
+    """
+    Form embeddings for die images by first quantized their colors down to the palette specified by `k_means`. Then a die's descriptor is just a (normalized) histogram of what colors are present.
+    """
     n_dice, H, W, C = dice_cropped.shape
     assert C == 3
 
@@ -186,6 +206,9 @@ def dice_to_histograms(dice_cropped, k_means):
 
 
 def load_labeled_dice():
+    """
+    Util used at prototyping time. Loads human-annotated die images. These images were first cropped and written into place by the function `write_dice()`, and then they were hand-labeled.
+    """
     labeled_dice_path = pathlib.Path("data/dice/labeled")
     labels_path = labeled_dice_path / "labels.txt"
     legal_player_labels = {
@@ -245,7 +268,9 @@ def load_labeled_dice():
 
 
 def kmeans_cluster_players(histograms, n_players):
-    """will hopefully provdie pretty good guesss of player assignments for each die"""
+    """
+    Given a stack of histograms for a bunch of dice, use k-means to (unsupervisedly!) group the dice by player.
+    """
     player_k_means = sklearn.cluster.KMeans(
         n_clusters=n_players, random_state=1338, n_init=3
     )  # `n_init=10` might be overkill
@@ -259,6 +284,9 @@ def kmeans_cluster_players(histograms, n_players):
 
 # TODO: find out if svm actually needed/useful. perhaps just directly using kmeans will perform well enough. However, this svm also provides the ability/flexibility for us to correct kmeans-generated labels.
 def fit_player_svm(histograms, label_train, n_players):
+    """
+    Unused in final pipeline, as directly using k means cluster predictions appears sufficient to classify dice players.
+    """
     svms = []
     for cls in range(n_players):
         in_class = np.where(label_train == cls, 1, -1)
@@ -269,6 +297,9 @@ def fit_player_svm(histograms, label_train, n_players):
 
 
 def infer_player_svm(histograms, svms):
+    """
+    Unused in final pipeline.
+    """
     n_samples = histograms.shape[0]
     n_classes = len(svms)
     scores = np.zeros((n_samples, n_classes))
@@ -287,17 +318,22 @@ def fit_player_colors(
     n_extra_clusters=1,
 ):
     """
+    Fit the dice player classifier. It's flexible to allow for new colors to be specified at the start of every round as new players potentially enter the game or old players leave.
+
     inputs:
-    - 1 or more images of all dice on game table, unlabeled (used to learn color palette)
-    - 1 or more images of each player's die (used to specify which index to give to each color)
+    - `unsupervised_dice_imgs`: 1 or more images of all dice on game table, unlabeled (used to learn color palette)
+    - `player_dice_imgs`: a list of stacks of images. The 0th entry is image(s) of player 0's dice, the 1th entry is of player 1's dice, etc. The player labels are not directly used for training the classifier; rather, they're just used to label clusters once they've been found. 
 
     outputs:
+    - `color_k_means`: the k-means model specifying the color palette used to form histograms from die images
+    - `player_k_means` the k-means model specifying how to map from histogram to a cluster id
+    - `cluster_to_player` a dict specifying how to map from a cluster id to a player id
     """
 
     n_players = len(player_dice_imgs)
 
     # (data shape assertions)
-    C = 3
+    C = 3 # channels
     N_unsupervised, H, W, _ = unsupervised_dice_imgs.shape
     assert unsupervised_dice_imgs.shape == (N_unsupervised, H, W, C)
     N_labeled = [0] * n_players
@@ -305,6 +341,11 @@ def fit_player_colors(
         N_labeled[player_idx], H, W, _ = dice_imgs.shape
         assert dice_imgs.shape == (N_labeled[player_idx], H, W, C)
 
+
+    #######################################################
+    # 1. learn color palette from `unsupervised_dice_imgs` 
+    # (learn color_k_means)
+    #######################################################
     print("Learning color palette from unsupervised dice img(s)...")
     dice_cropped = []
     for img_idx in range(N_unsupervised):
@@ -326,6 +367,10 @@ def fit_player_colors(
     imshow(einops.rearrange(palette, "(h w) C -> h w C", w=8))
     plt.title("Color palette")
 
+    #######################################################
+    # 2. cluster players
+    # (learn player_k_means)
+    #######################################################
     print("Clustering to obtain player assignments...")
     all_dice_cropped = []
     histograms = []
@@ -350,12 +395,6 @@ def fit_player_colors(
             assert labeled_dice_cropped.shape == (n_dice, H, W, C)
             all_dice_cropped.append(labeled_dice_cropped)
 
-            # # debug: view dice in this image
-            # plt.figure()
-            # show_imgs_grid(labeled_dice_cropped)
-            # plt.title(f"Dice in image")
-            # plt.show()
-
             curr_histograms = dice_to_histograms(labeled_dice_cropped, color_k_means)
             curr_class_labels = np.array([p] * n_dice)
             histograms.append(curr_histograms)
@@ -366,6 +405,7 @@ def fit_player_colors(
     histograms = np.concat(histograms, axis=0)
     class_labels = np.concat(class_labels, axis=0)
 
+    # # debug: view all dice found
     # print(f"{all_dice_cropped.shape=}")
     # plt.figure()
     # show_imgs_grid(all_dice_cropped)
@@ -377,7 +417,7 @@ def fit_player_colors(
         + n_extra_clusters,  # add a pseudo-player to try to catch spurious dice detections, e.g. the emblems on cards
     )
 
-    # debug: visualize
+    # debug: visualize clusters
     pca = sklearn.decomposition.PCA(n_components=2, whiten=True, random_state=1338)
     hist_pca = pca.fit_transform(histograms)
     plt.figure()
@@ -391,6 +431,12 @@ def fit_player_colors(
     plt.colorbar()
     plt.show()
 
+    #######################################################
+    # 3. match clusters to player ids
+    # (results in `cluster_to_player`)
+    # if a cluster is composed of >=70% of one player, then it's considered to belong to that player
+    # clusters not composed of >=70% of one player are not considered to belong to any player (in practice, this catches some spurious dice detections such as the spades on certain playing cards)
+    #######################################################
     cluster_to_player = {}
     for cluster_id in range(n_players + n_extra_clusters):
         is_member = cluster_assignments == cluster_id
@@ -401,13 +447,12 @@ def fit_player_colors(
         print(f"{classes_present=}")
         unique,counts = np.unique(class_labels[is_member], return_counts=True)
 
-        if np.max(counts) > 0.7 * np.sum(is_member):
-        # if len(classes_present) == 1:
+        if np.max(counts) > 0.7 * np.sum(is_member): # 70% voting
             mode = unique[np.argmax(counts)]
             cluster_to_player[cluster_id] = mode
             print(f"Cluster {cluster_id} members (>70%) -> Player {mode}")
             plt.title(
-                f"Cluster {cluster_id} members (homogeneous) -> Player {mode}"
+                f"Cluster {cluster_id} members (>70%) -> Player {mode}"
             )
         else:
             print(f"Cluster {cluster_id} members (heterogeneous)")
@@ -417,9 +462,10 @@ def fit_player_colors(
     return color_k_means, player_k_means, cluster_to_player
 
 
-def predict_player_colors(
-    dice_cropped, color_k_means, player_k_means, cluster_to_player: dict
-):
+def predict_player_colors(dice_cropped, color_k_means, player_k_means, cluster_to_player: dict):
+    """
+    Converts the dice to histograms via `color_k_means`, then assigns cluster memberships to the dice via `player_k_means`, then converts the output to player ids via `cluster_to_player`
+    """
     n_dice, H, W, _ = dice_cropped.shape
     assert dice_cropped.shape == (n_dice, H, W, 3)
 
@@ -428,7 +474,6 @@ def predict_player_colors(
 
     histograms = dice_to_histograms(dice_cropped, color_k_means)
     cluster_memberships = player_k_means.predict(histograms)
-    # cluster_to_player_v = np.vectorize(lambda x: cluster_to_player.get(x, NO_PLAYER))
 
     player_assignments = np.zeros(cluster_memberships.shape[0])
     print(f"{cluster_to_player=}")
@@ -437,26 +482,16 @@ def predict_player_colors(
         player_assignments[i] = cluster_to_player.get(cluster_memberships[i], NO_PLAYER)
     print(f"{player_assignments=}")
 
-    # player_assignments = cluster_to_player_v(cluster_memberships)
-
+    # TODO: vectorize?
+    # cluster_to_player_v = np.vectorize(lambda x: cluster_to_player.get(x, NO_PLAYER))
+    # player_assignments = cluster_to_player_v(cluster_memberships) # TODO: vectorize?
 
     return player_assignments
 
-
-# def predict_player_colors(img, obb_res, color_k_means, player_k_means, cluster_to_player: dict):
-#     dice_cropped = batch_crop_dice(img, obb_res)
-#     n_dice,H,W,_ = dice_cropped.shape
-#     assert dice_cropped.shape == (n_dice,H,W,3)
-
-#     histograms = dice_to_histograms(dice_cropped, color_k_means)
-#     cluster_memberships = player_k_means.predict(histograms)
-#     NO_PLAYER = -1
-#     cluster_to_player_v = np.vectorize(lambda x: cluster_to_player.get(x, NO_PLAYER))
-#     player_assignments = cluster_to_player_v(cluster_memberships)
-#     return player_assignments
-
-
 def predict_die_value(dice_cropped, value_cls_model):
+    """
+    Not too much happening here. Just calls the YOLO-cls model to classify die faces
+    """
     res = value_cls_model([die for die in dice_cropped], verbose=False)
     n_dice = len(res)
     top1 = np.zeros(n_dice)
@@ -473,6 +508,9 @@ def predict_die_value(dice_cropped, value_cls_model):
 
 
 class ObbShim:
+    """
+    A "shim"/wrapper to allow new results to be injected into the OBB results wihtout disrupting the downstream state tracking and scoring API.
+    """
     # making this shim so we can set fields of immutable objects (e.g. setting obb.cls, which does not ordinarily have a setter)
     # a little scuffed i think
     def __init__(self, original_res):
@@ -488,6 +526,16 @@ class ObbShim:
 
 
 class RecognitionModel:
+    """
+    Wraps:
+    - The oriented bounding box model (YOLOv8-obb)
+    - The die player classifier (k means)
+    - The die value classifier (YOLOv8-cls)
+    Then returns an object that looks just like an ordinary YOLO obb result, except the class results have been updated to include the further dice classifications (i.e. things that were previously class 'die' are classes like 'red_5', 'blue_2', etc. according to the values returned by the player and value classifiers)
+    
+    Additionally, die bounding boxes that appear to correspond to no player or that confuse the value classification model are instead assigned class 'INVALID'. This helps clean up/remove spurious die detections made by the OBB model.
+    """
+
     def __init__(
         self,
         obb_model_path="model/rdg_obb6/weights/best.pt",
@@ -528,6 +576,12 @@ class RecognitionModel:
         return (player + 1) * 10 + value
 
     def predict(self, frame, obb_confidence=0.15, value_confidence=0.0):
+        """
+        Acts like an (almost) drop-in replacement for the original OBB model used in version 1.
+        Given a frame, uses the obb model to find bounding boxes
+        Then uses the player and value classifiers to enrich the bounding box class outputs (transforms 'die' labels into the ones including player and value data)
+        """
+
         obb_res = self.obb_model(frame, conf=obb_confidence, verbose=False)[0]
         obb_res.obb = ObbShim(obb_res.obb)  # what horrors am i committing
         obb_res.obb.cls = obb_res.obb.cls.detach().cpu().numpy()
@@ -554,7 +608,7 @@ class RecognitionModel:
         print(bad_dice_mask)
 
         objects_to_exclude = dice_indices[bad_dice_mask]
-        # hacky method but gets the job done
+        # slightly hacky method but gets the job done
         obb_res.obb.cls[objects_to_exclude] = -1
 
         INVALID = -1
@@ -577,9 +631,11 @@ class RecognitionModel:
 
 
 def main():
+    """
+    Runs the recognition model on an example image (`data/misc/all.jpg`)
+    """
     recognition_model = RecognitionModel()
 
-    # unsupervised_imgs = np.stack(cv2.imread("data/misc/all.jpg"), axis=0)
     unsupervised_imgs = np.stack([cv2.imread("data/misc/all.jpg")], axis=0)
     player_imgs = [
         np.stack([cv2.imread("data/misc/red.jpg")], axis=0),
@@ -597,20 +653,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    # obb_model = YOLO("model/rdg_obb/weights/best.pt")
 
-    # example_frame = "data/frames/frame_0214.jpg"
-    # img = cv2.imread(example_frame)
-    # # plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-    # imshow(img)
-
-    # res = obb_model(img, task='obb')[0]
-    # res
-
-    # res.obb
-
-    # dice_bbs = res.obb.xyxyxyxy[res.obb.cls == DIE, ...]
-    # die_idx = 0
-    # bb = dice_bbs[die_idx,...].cpu().numpy()
-
-    # res_shape = (128,128)
