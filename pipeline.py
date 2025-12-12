@@ -18,7 +18,6 @@ def main(vid_src):
         np.stack([cv2.imread("data/misc/yellow.jpg")], axis=0),
         np.stack([cv2.imread("data/misc/purple.jpg")], axis=0),
     ] # collections of images containing dice from players 0, player 1, etc. in order. These are used to label clusters. This method is used to specificically account for spurious dice detections (e.g. some elements on playing cards are occasionally marked as dice. however, these spurious dice themselves form a cluster that appears spread across all 3 players' dice images. Thus we can detect this cluster as the one where no one class has a strong majority presence.
-
     model.train_player_vocab(unsupervised_imgs, player_imgs, n_extra_clusters=1)
     print("Dice palette and clusters learned!")
 
@@ -32,8 +31,8 @@ def main(vid_src):
         print("Video Source not detected")
         return
 
+    # frame loop
     frame_num = -1
-
     while True:
         ret, frame = cap.read()
         if not ret or frame is None:
@@ -47,10 +46,9 @@ def main(vid_src):
         res = results
 
         detections = []
-        print(res.obb._original_res.cls)
+        # print(res.obb._original_res.cls)
         for i, _ in enumerate(res.obb):
             x1, y1, x2, y2 = res.obb.xyxy[i, ...]
-            # print(f"{res.obb.xyxyxyxy.shape=}")
             detections.append(
                 {
                     "bbox": [float(x1), float(y1), float(x2), float(y2)],
