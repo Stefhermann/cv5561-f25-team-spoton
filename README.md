@@ -29,7 +29,12 @@ Camdroid and OBS seem to work well
 
 ## Methods
 
-Bounding boxes (`die`, `ace`, `two`, `three`, `four`) are via YOLOv8-obb. Dice are then classified by 
+- Recognition (`classify_dice.py`)
+Bounding boxes (with classes `die`, `ace`, `two`, `three`, `four`) are via YOLOv8-obb. Dice are then further classified by the player classifier (color-based via $k$-means) and the value classifier (YOLOv8-cls). The recognition pipeline outputs classified bounding boxes (classes: `ace`, `two`, `three`, `four`, `red_1`, `red_2`, ..., `blue_5`, `blue_6`, and `INVALID_DIE`).
+
+- State tracking and scoring (`spatial_association.py`, `tracking.py`, `scoring.py`)
+Dice are associated with cards based on if their bounding box centroids fall within the card's bounding box. This information is passed to the dice tracker, which stores information about the game state over time. We experimented with more complex methods and enhancements to this procedure (e.g. IoU-based associatiation, Kalman filter in tracker to mitigate frame-to-frame flicker), but we found simple methods to produce the best results.
+
 
 Pipeline visualization
 ```mermaid
@@ -38,11 +43,11 @@ config:
     layout: elk
 ---
 flowchart
-
 %% --- Styles ---
 classDef data fill:#ccccee,stroke:#555599,stroke-width:1px,color:#000;
 classDef func fill:#c9c9c9,stroke:#555555,stroke-width:1px,color:#000;
 style recognition fill:#fefaee,stroke:#000000;
+style state-tracking fill:#fefaee,stroke:#000000;
 
 %% --- Node definitions ---
 %% Data nodes
@@ -64,8 +69,15 @@ subgraph recognition ["Recognition"]
 end
 
 A10([Labeled OBBs]):::data
-A11{{Spatial Association, State Tracking}}:::func
+A11{{Spatial Association}}:::func
 A12([Associations]):::data
+
+subgraph state-tracking ["State Tracking"]
+    A19([Past Game State]):::data
+    A18{{Game State Tracker}}:::func
+    A20([Game State]):::data
+end
+
 A13{{Scoring}}:::func
 A14{{Visualization}}:::func
 A15([Scores]):::data
@@ -90,10 +102,14 @@ A8 --> A9
 A9 --> A10
 A10 --> A11
 A11 --> A12
-A12 --> A13
+A12 --> A18
+A19 --> A18
+A18 --> A20
 A13 --> A15
+A20 --> A13
 A-1 --> A14
 A15 --> A14
-A12 --> A14
+A20 --> A14
 A14 --> A16
 ```
+

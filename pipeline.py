@@ -10,17 +10,17 @@ from visualization import draw_associations
 
 
 def main(vid_src):
-    # model = YOLO("model/rdg_obb6/weights/best.pt")
     model = RecognitionModel()
 
-    unsupervised_imgs = np.stack([cv2.imread("data/misc/all.jpg")], axis=0)
+    unsupervised_imgs = np.stack([cv2.imread("data/misc/all.jpg")], axis=0) # dice are localized and cropped out of these images, and their colors are used to learn a color palette
     player_imgs = [
         np.stack([cv2.imread("data/misc/red.jpg")], axis=0),
         np.stack([cv2.imread("data/misc/yellow.jpg")], axis=0),
         np.stack([cv2.imread("data/misc/purple.jpg")], axis=0),
-    ]
+    ] # collections of images containing dice from players 0, player 1, etc. in order. These are used to label clusters. This method is used to specificically account for spurious dice detections (e.g. some elements on playing cards are occasionally marked as dice. however, these spurious dice themselves form a cluster that appears spread across all 3 players' dice images. Thus we can detect this cluster as the one where no one class has a strong majority presence.
+
     model.train_player_vocab(unsupervised_imgs, player_imgs, n_extra_clusters=1)
-    print("Vocab learned")
+    print("Dice palette and clusters learned!")
 
     tracker = DiceTracker()
     scorer = Scoring()
@@ -40,12 +40,9 @@ def main(vid_src):
             print("End of video or frame read failed.")
             break
         frame_num += 1
-        if frame_num < 540:
-            continue
 
         print(f"==== Frame {frame_num} ====")
 
-        # results = model(frame, task = "obb", conf = 0.25, imgsz = 512)
         results = model(frame)
         res = results
 
@@ -79,7 +76,6 @@ def main(vid_src):
             frame.copy(), associations, detections, res.names, tracked_dice, scores
         )
 
-        # cv2.imshow("🎲♠️ Rhubarb Dice Game Real Time Scoring", frame_out)
         cv2.imshow("Rhubarb Dice Game Real Time Scoring", frame_out)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
