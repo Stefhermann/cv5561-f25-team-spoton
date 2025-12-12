@@ -37,7 +37,7 @@ Pipeline visualization
 config:
     layout: elk
 ---
-flowchart LR
+flowchart
 
 %% --- Styles ---
 classDef data fill:#ccccee,stroke:#555599,stroke-width:1px,color:#000;
