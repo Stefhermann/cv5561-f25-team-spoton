@@ -10,10 +10,13 @@ def centroid(x1, y1, x2, y2):
 
 
 def extract_card_dice(detections, names):
+    """
+    Extracts cards and dice from a list of detections. Takes in a list of detections and a list of class names as parameters and returns two lists, one each for cards and dice
+    """
     cards, dice = [], []
 
     for det in detections:
-        x1, y1, x2, y2 = det["bbox"]  # <-- FIXED: Using bbox instead of xyxy
+        x1, y1, x2, y2 = det["bbox"]  #Using bbox instead of xyxy
         cls_id = det["cls"]
         cls_name = names[cls_id]
 
@@ -32,6 +35,7 @@ def extract_card_dice(detections, names):
 
 
 def associate_die_card(detections, names):
+    #Associates dice with cards based on if their bounding box centroids fall within the card's bounding box.
     cards, dice = extract_card_dice(detections, names)
 
     associations = []
